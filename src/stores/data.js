@@ -181,53 +181,67 @@ export const useDataStore = defineStore('data', {
       return deleted
     },
 
-    async addTask(task) {
-      // Map camelCase to snake_case for Supabase
-      const snakeTask = {
-        title: task.title,
-        project_id: task.projectId || '',
-        assignee_id: task.assigneeId || '',
-        status: task.status,
-        size: task.size,
-        priority: task.priority,
-        estimated_hours: task.estimatedHours || 0,
-        actual_hours: task.actualHours || 0,
-        role: task.role,
-        rework_count: task.reworkCount || 0,
-        created_at: task.createdAt || new Date().toISOString().split('T')[0],
-        started_at: task.startedAt || null,
-        completed_at: task.completedAt || null
-      }
-      const newTask = await db.create('tasks', snakeTask)
-      if (newTask) this.tasks.push(this._taskToCamel(newTask, 'task'))
-      return newTask
-    },
+     async addTask(task) {
+       // Map camelCase to snake_case for Supabase
+       // Use null instead of empty string for UUID columns
+       const snakeTask = {
+         title: task.title,
+         project_id: task.projectId || null,
+         assignee_id: task.assigneeId || null,
+         status: task.status,
+         size: task.size,
+         priority: task.priority,
+         estimated_hours: task.estimatedHours || 0,
+         actual_hours: task.actualHours || 0,
+         role: task.role,
+         rework_count: task.reworkCount || 0,
+         created_at: task.createdAt || new Date().toISOString().split('T')[0],
+         started_at: task.startedAt || null,
+         completed_at: task.completedAt || null
+       }
+       const newTask = await db.create('tasks', snakeTask)
+       if (newTask) this.tasks.push(this._taskToCamel(newTask, 'task'))
+       return newTask
+     },
 
-    async updateTask(id, updates) {
-      // Map camelCase to snake_case for Supabase
-      const snakeUpdates = {
-        title: updates.title,
-        project_id: updates.projectId,
-        assignee_id: updates.assigneeId,
-        status: updates.status,
-        size: updates.size,
-        priority: updates.priority,
-        estimated_hours: updates.estimatedHours,
-        actual_hours: updates.actualHours,
-        role: updates.role,
-        rework_count: updates.reworkCount
-      }
-      // Remove undefined values
-      Object.keys(snakeUpdates).forEach(key => {
-        if (snakeUpdates[key] === undefined) delete snakeUpdates[key]
-      })
-      const updated = await db.update('tasks', id, snakeUpdates)
-      if (updated) {
-        const idx = this.tasks.findIndex(t => t.id === id)
-        if (idx !== -1) this.tasks[idx] = this._taskToCamel(updated, 'task')
-      }
-      return updated
-    },
+     async updateTask(id, updates) {
+       // Map camelCase to snake_case for Supabase
+       // Use null instead of empty string for UUID columns
+       // Auto-set started_at when status changes to in-progress
+       const today = new Date().toISOString().split('T')[0]
+       
+       // Get current task to check if status is changing
+       const currentTask = this.tasks.find(t => t.id === id)
+       const statusChangedToInProgress = currentTask && currentTask.status !== 'in-progress' && updates.status === 'in-progress'
+       const statusChangedToDone = currentTask && currentTask.status !== 'done' && updates.status === 'done'
+       
+       const snakeUpdates = {
+         title: updates.title,
+         project_id: updates.projectId || null,
+         assignee_id: updates.assigneeId || null,
+         status: updates.status,
+         size: updates.size,
+         priority: updates.priority,
+         estimated_hours: updates.estimatedHours,
+         actual_hours: updates.actualHours,
+         role: updates.role,
+         rework_count: updates.reworkCount,
+         // Auto-set started_at when transitioning to in-progress
+         ...(statusChangedToInProgress && !currentTask.startedAt ? { started_at: today } : {}),
+         // Auto-set completed_at when transitioning to done
+         ...(statusChangedToDone ? { completed_at: today } : {})
+       }
+       // Remove undefined values
+       Object.keys(snakeUpdates).forEach(key => {
+         if (snakeUpdates[key] === undefined) delete snakeUpdates[key]
+       })
+       const updated = await db.update('tasks', id, snakeUpdates)
+       if (updated) {
+         const idx = this.tasks.findIndex(t => t.id === id)
+         if (idx !== -1) this.tasks[idx] = this._taskToCamel(updated, 'task')
+       }
+       return updated
+     },
 
     async deleteTask(id) {
       const deleted = await db.delete('tasks', id)

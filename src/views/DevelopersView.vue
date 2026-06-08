@@ -7,17 +7,16 @@
     
     <!-- Summary Metrics -->
     <div class="summary-metrics">
-      <div class="metric-card" :class="avgDaysBacklog >= 5 ? 'metric-bad' : avgDaysBacklog >= 3 ? 'metric-warn' : 'metric-good'">
+      <div class="metric-card">
         <div class="metric-value">{{ avgDaysBacklog }}</div>
         <div class="metric-label">Avg Days Backlog</div>
-        <div v-if="avgDaysBacklog >= 5" class="metric-alert">Above 5-day threshold</div>
       </div>
-      <div class="metric-card metric-warn">
+      <div class="metric-card">
         <div class="metric-value">{{ totalAssignedHours }}h</div>
         <div class="metric-label">Total Assigned Hours</div>
         <div class="metric-sub">Across {{ filteredOccupancy.length }} developers</div>
       </div>
-      <div class="metric-card metric-good">
+      <div class="metric-card">
         <div class="metric-value">{{ availableDevs }}</div>
         <div class="metric-label">Available Devs</div>
         <div class="metric-sub">Out of {{ filteredOccupancy.length }} total</div>
@@ -33,42 +32,81 @@
     <div class="developers-grid">
       <div v-for="dev in filteredOccupancy" :key="dev.id" class="dev-card">
         <div class="dev-header">
-          <div>
-            <div class="dev-name">{{ dev.name }} ({{ getRoleLabel(dev.role) }})</div>
-            <div class="dev-capacity">Capacity: {{ dev.capacity }} hours/day • {{ getLevelLabel(dev.level) }} Level</div>
-          </div>
-          <span class="days-indicator" :class="getDaysIndicatorClass(dev)">{{ dev.daysQueued }} days queued</span>
-        </div>
-        
-        <div class="workload-section">
-          <div class="workload-text">
-            <strong>{{ dev.allocatedHours + dev.queuedHours }}</strong> hours assigned across <strong>{{ dev.activeTasks + dev.queuedTasks }}</strong> tasks
-          </div>
-          <div class="workload-bar-container">
-            <div class="workload-bar" :class="getWorkloadBarClass(dev)" :style="{ width: Math.min(100, dev.occupancyRate) + '%' }">
-              {{ dev.occupancyRate }}% workload ({{ dev.allocatedHours }}h / {{ dev.capacity }}h capacity)
+          <div class="dev-info">
+            <div class="dev-name">{{ dev.name }}</div>
+            <div class="dev-meta">
+              <Tag :value="getRoleLabel(dev.role)" />
+              <Tag :value="getLevelLabel(dev.level)" severity="info" />
             </div>
           </div>
-          <div class="workload-labels">
-            <span>0h</span>
-            <span>{{ dev.capacity }}h (1 day)</span>
-            <span>{{ dev.capacity * 5 }}h (5 days)</span>
-            <span>{{ dev.capacity * 6 }}h+</span>
+          <div class="status-badge" :class="'status-' + dev.occupancyStatus">
+            <div class="status-icon" :class="'status-' + dev.occupancyStatus"></div>
+            <span>{{ getStatusLabel(dev.occupancyStatus) }}</span>
           </div>
         </div>
         
-        <div class="queue-depth">
-          <div class="queue-item" :class="getQueueItemClass(dev.daysQueued, 'days')">
-            <div class="queue-value">{{ dev.daysQueued }}</div>
-            <div class="queue-label">Days of Work</div>
+        <!-- Metrics Row -->
+        <div class="metrics-row">
+          <div class="mini-metric">
+            <div class="mini-value">{{ dev.capacity }}h</div>
+            <div class="mini-label">Daily Capacity</div>
           </div>
-          <div class="queue-item">
-            <div class="queue-value">{{ dev.activeTasks + dev.queuedTasks }}</div>
-            <div class="queue-label">Tasks Queued</div>
+          <div class="mini-metric">
+            <div class="mini-value">{{ dev.allocatedHours }}h</div>
+            <div class="mini-label">Active Work</div>
           </div>
-          <div class="queue-item" :class="dev.activeTasks === 0 ? 'queue-good' : 'queue-warn'">
-            <div class="queue-value">{{ dev.activeTasks }}</div>
-            <div class="queue-label">In Progress</div>
+          <div class="mini-metric">
+            <div class="mini-value">{{ dev.queuedHours }}h</div>
+            <div class="mini-label">Queued</div>
+          </div>
+          <div class="mini-metric">
+            <div class="mini-value">{{ dev.daysQueued }}</div>
+            <div class="mini-label">Days of Work</div>
+          </div>
+        </div>
+        
+        <!-- Workload Bar -->
+        <div class="workload-section">
+          <div class="workload-header">
+            <span class="workload-label">Weekly Workload</span>
+            <span class="workload-percent">{{ dev.occupancyRate }}%</span>
+          </div>
+          <div class="workload-bar-container">
+            <div class="workload-bar-bg"></div>
+            <div class="workload-bar-fill" :style="{ width: Math.min(100, dev.occupancyRate) + '%' }" :class="'fill-' + dev.occupancyStatus"></div>
+            <div class="workload-bar-text">{{ dev.allocatedHours + dev.queuedHours }}h / {{ dev.capacity * 5 }}h</div>
+          </div>
+        </div>
+        
+        <!-- Task Breakdown -->
+        <div class="task-breakdown">
+          <div class="task-column">
+            <div class="task-column-header">
+              <span class="column-title">Active</span>
+              <span class="column-count">{{ dev.activeTasks }}</span>
+            </div>
+            <div class="task-list">
+              <div v-for="task in getActiveTasks(dev.id)" :key="task.id" class="task-item" :class="'task-' + task.status">
+                <span class="task-title">{{ task.title }}</span>
+                <span class="task-size" :class="'size-' + task.size">{{ task.size }}</span>
+                <span class="task-hours">{{ task.estimatedHours }}h</span>
+              </div>
+              <div v-if="getActiveTasks(dev.id).length === 0" class="empty-tasks">No active tasks</div>
+            </div>
+          </div>
+          <div class="task-column">
+            <div class="task-column-header">
+              <span class="column-title">Queued</span>
+              <span class="column-count">{{ dev.queuedTasks }}</span>
+            </div>
+            <div class="task-list">
+              <div v-for="task in getQueuedTasks(dev.id)" :key="task.id" class="task-item">
+                <span class="task-title">{{ task.title }}</span>
+                <span class="task-size" :class="'size-' + task.size">{{ task.size }}</span>
+                <span class="task-hours">{{ task.estimatedHours }}h</span>
+              </div>
+              <div v-if="getQueuedTasks(dev.id).length === 0" class="empty-tasks">No queued tasks</div>
+            </div>
           </div>
         </div>
       </div>
@@ -128,26 +166,27 @@ function getLevelLabel(level) {
   return labels[level] || level
 }
 
-function getDaysIndicatorClass(dev) {
-  const days = dev.daysQueued || 0
-  if (days >= 5) return 'overloaded'
-  if (days >= 3) return 'heavy'
-  return ''
-}
-
-function getWorkloadBarClass(dev) {
-  if (dev.occupancyStatus === 'overloaded') return 'overloaded'
-  if (dev.occupancyStatus === 'optimal') return 'normal'
-  return 'normal'
-}
-
-function getQueueItemClass(value, type) {
-  if (type === 'days') {
-    if (value >= 5) return 'queue-bad'
-    if (value >= 3) return 'queue-warn'
-    return 'queue-good'
+function getStatusLabel(status) {
+  const labels = {
+    'available': 'Available',
+    'optimal': 'Optimal',
+    'overloaded': 'Overloaded'
   }
-  return ''
+  return labels[status] || status
+}
+
+function getActiveTasks(devId) {
+  return dataStore.tasks.filter(t => 
+    t.assigneeId === devId && 
+    (t.status === 'in-progress' || t.status === 'review')
+  )
+}
+
+function getQueuedTasks(devId) {
+  return dataStore.tasks.filter(t => 
+    t.assigneeId === devId && 
+    (t.status === 'backlog' || t.status === 'ready')
+  )
 }
 </script>
 
@@ -204,20 +243,10 @@ function getQueueItemClass(value, type) {
   margin-top: 4px;
 }
 
-.metric-alert {
-  font-size: 11px;
-  color: #dc2626;
-  margin-top: 4px;
-}
-
-.metric-good .metric-value { color: #10b981; }
-.metric-warn .metric-value { color: #f59e0b; }
-.metric-bad .metric-value { color: #ef4444; }
-
 /* Developer Cards */
 .developers-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
   gap: 20px;
 }
 
@@ -233,43 +262,90 @@ function getQueueItemClass(value, type) {
   transform: translateY(-2px);
 }
 
+/* Dev Header */
 .dev-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .dev-name {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 6px;
+}
+
+.dev-meta {
+  display: flex;
+  gap: 8px;
+}
+
+/* Status Badge */
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-available {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-optimal {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-overloaded {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-icon.status-available { background: #10b981; }
+.status-icon.status-optimal { background: #3b82f6; }
+.status-icon.status-overloaded { background: #ef4444; }
+
+/* Metrics Row */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mini-metric {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.mini-value {
+  font-size: 20px;
+  font-weight: 700;
   color: #1f2937;
 }
 
-.dev-capacity {
-  font-size: 13px;
+.mini-label {
+  font-size: 10px;
   color: #6b7280;
+  text-transform: uppercase;
   margin-top: 2px;
-}
-
-.days-indicator {
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  background: #e0e7ff;
-  color: #3730a3;
-  white-space: nowrap;
-}
-
-.days-indicator.heavy {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.days-indicator.overloaded {
-  background: #fee2e2;
-  color: #991b1b;
 }
 
 /* Workload Section */
@@ -277,76 +353,155 @@ function getQueueItemClass(value, type) {
   margin-bottom: 16px;
 }
 
-.workload-text {
-  font-size: 13px;
+.workload-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.workload-label {
+  font-size: 12px;
+  font-weight: 600;
   color: #374151;
-  margin-bottom: 8px;
+}
+
+.workload-percent {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
 }
 
 .workload-bar-container {
+  position: relative;
   background: #e5e7eb;
   border-radius: 8px;
-  height: 24px;
+  height: 32px;
   overflow: hidden;
-  margin-bottom: 8px;
 }
 
-.workload-bar {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.workload-bar-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.workload-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  border-radius: 8px;
+  transition: width 0.3s ease;
+}
+
+.fill-available { background: linear-gradient(90deg, #10b981, #059669); }
+.fill-optimal { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+.fill-overloaded { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+.workload-bar-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   font-size: 11px;
   font-weight: 600;
-  color: white;
-  transition: width 0.3s ease;
-  min-width: 60px;
+  color: #1f2937;
+  white-space: nowrap;
 }
 
-.workload-bar.normal {
-  background: linear-gradient(90deg, #10b981, #059669);
-}
-
-.workload-bar.overloaded {
-  background: linear-gradient(90deg, #ef4444, #dc2626);
-}
-
-.workload-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: #6b7280;
-}
-
-/* Queue Depth */
-.queue-depth {
-  display: flex;
+/* Task Breakdown */
+.task-breakdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
-.queue-item {
-  flex: 1;
+.task-column {
   background: #f8fafc;
   border-radius: 8px;
   padding: 12px;
-  text-align: center;
 }
 
-.queue-value {
-  font-size: 24px;
+.task-column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.column-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.column-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  background: #e5e7eb;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: white;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.task-title {
+  flex: 1;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-size {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 10px;
   font-weight: 700;
 }
 
-.queue-label {
-  font-size: 11px;
+.size-S { background: #dcfce7; color: #166534; }
+.size-M { background: #dbeafe; color: #1e40af; }
+.size-L { background: #fef3c7; color: #92400e; }
+.size-XL { background: #fee2e2; color: #991b1b; }
+
+.task-hours {
   color: #6b7280;
-  text-transform: uppercase;
-  margin-top: 4px;
+  font-weight: 600;
 }
 
-.queue-good .queue-value { color: #10b981; }
-.queue-warn .queue-value { color: #f59e0b; }
-.queue-bad .queue-value { color: #ef4444; }
+.empty-tasks {
+  font-size: 11px;
+  color: #9ca3af;
+  font-style: italic;
+  text-align: center;
+  padding: 8px;
+}
 
 @media (max-width: 1200px) {
   .summary-metrics {
@@ -359,6 +514,12 @@ function getQueueItemClass(value, type) {
     grid-template-columns: 1fr;
   }
   .developers-grid {
+    grid-template-columns: 1fr;
+  }
+  .metrics-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .task-breakdown {
     grid-template-columns: 1fr;
   }
 }
