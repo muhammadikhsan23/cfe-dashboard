@@ -3,9 +3,9 @@ import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import Aura from '@primeuix/themes/aura'
 import 'primeicons/primeicons.css'
-import { initDatabase } from './db/database'
 import App from './App.vue'
 import router from './router'
+import { useAuthStore } from './stores/auth'
 
 // PrimeVue components we'll use
 import Button from 'primevue/button'
@@ -39,6 +39,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Slider from 'primevue/slider'
+import Password from 'primevue/password'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -81,8 +82,15 @@ app.component('TabList', TabList)
 app.component('Tab', Tab)
 app.component('TabPanels', TabPanels)
 app.component('TabPanel', TabPanel)
+app.component('Password', Password)
+app.component('SelectButton', SelectButton)
+app.component('ToggleSwitch', ToggleSwitch)
+app.component('IconField', IconField)
+app.component('InputIcon', InputIcon)
+app.component('Slider', Slider)
 
-// Initialize database and mount app
-initDatabase().then(() => {
+// Initialize auth before app starts
+const authStore = useAuthStore()
+authStore.init().then(() => {
   app.mount('#app')
 })

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@primeuix/themes": "^1.0.0",
+    "@supabase/supabase-js": "^2.107.0",
     "echarts": "^5.6.0",
     "idb-keyval": "^6.2.1",
     "pinia": "^2.3.0",

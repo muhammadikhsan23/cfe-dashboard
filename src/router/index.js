@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const routes = [
   {
@@ -59,6 +60,34 @@ const routes = [
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
   routes
+})
+
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore()
+
+  // Wait for auth to initialize
+  if (authStore.loading) {
+    await new Promise(resolve => {
+      const unwatch = setInterval(() => {
+        if (!authStore.loading) {
+          clearInterval(unwatch)
+          resolve()
+        }
+      }, 100)
+    })
+  }
+
+  // Check if route requires authentication
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    return next({ name: 'Login' })
+  }
+
+  // Check if route requires manager role
+  if (to.meta.requiresManager && !authStore.isManager) {
+    return next({ name: 'Dashboard' })
+  }
+
+  next()
 })
 
 export default router

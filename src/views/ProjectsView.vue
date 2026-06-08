@@ -191,7 +191,7 @@ async function saveProject() {
 
 async function deleteProject(id) {
   if (confirm('Delete this project?')) {
-    await dataStore.removeProject(id)
+    await dataStore.deleteProject(id)
   }
 }
 </script>

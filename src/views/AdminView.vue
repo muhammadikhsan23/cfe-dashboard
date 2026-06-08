@@ -614,21 +614,21 @@ async function handleJSONImport(text, type) {
     } else if (type === 'developers' && Array.isArray(data)) {
       for (const dev of data) {
         if (dev.name && dev.role) {
-          await dataStore.addDeveloper({ id: 'dev-' + Date.now() + Math.random(), ...dev })
+          await dataStore.addDeveloper(dev)
         }
       }
       alert('Developers imported!')
     } else if (type === 'tasks' && Array.isArray(data)) {
       for (const task of data) {
         if (task.title) {
-          await dataStore.addTask({ id: 't-' + Date.now() + Math.random(), ...task })
+          await dataStore.addTask(task)
         }
       }
       alert('Tasks imported!')
     } else if (type === 'projects' && Array.isArray(data)) {
       for (const proj of data) {
         if (proj.name) {
-          await dataStore.addProject({ id: 'proj-' + Date.now() + Math.random(), ...proj })
+          await dataStore.addProject(proj)
         }
       }
       alert('Projects imported!')
@@ -656,7 +656,6 @@ async function handleCSVImport(text, type) {
       headers.forEach((h, idx) => { obj[h] = row[idx] || '' })
       if (obj.Name && obj.Role) {
         await dataStore.addDeveloper({
-          id: 'dev-' + Date.now() + Math.random(),
           name: obj.Name,
           role: obj.Role.toLowerCase(),
           level: obj.Level || 'mid',
@@ -676,7 +675,6 @@ async function handleCSVImport(text, type) {
         const assignee = dataStore.developers.find(d => d.name === obj.Assignee)
         const project = dataStore.projects.find(p => p.name === obj.Project)
         await dataStore.addTask({
-          id: 't-' + Date.now() + Math.random(),
           title: obj.Title,
           status: obj.Status || 'backlog',
           size: obj.Size || 'M',
@@ -701,7 +699,6 @@ async function handleCSVImport(text, type) {
       headers.forEach((h, idx) => { obj[h] = row[idx] || '' })
       if (obj.Name) {
         await dataStore.addProject({
-          id: 'proj-' + Date.now() + Math.random(),
           name: obj.Name,
           client: obj.Client || '',
           status: obj.Status || 'active',
@@ -763,10 +760,18 @@ function onLevelChange() {
 async function saveDeveloper() {
   if (!devForm.value.name) return
   const skills = devForm.value.skillsStr.split(',').map(s => s.trim()).filter(Boolean)
+  const devData = {
+    name: devForm.value.name,
+    role: devForm.value.role,
+    type: devForm.value.type,
+    level: devForm.value.level,
+    capacity: devForm.value.capacity,
+    skills
+  }
   if (editingDev.value) {
-    await dataStore.editDeveloper(editingDev.value.id, { ...devForm.value, skills })
+    await dataStore.editDeveloper(editingDev.value.id, devData)
   } else {
-    await dataStore.addDeveloper({ id: 'dev-' + Date.now(), ...devForm.value, skills })
+    await dataStore.addDeveloper(devData)
   }
   closeDevDialog()
 }
@@ -786,19 +791,25 @@ function closeTaskDialog() {
 async function saveTask() {
   if (!taskForm.value.title) return
   const proj = dataStore.projects.find(p => p.id === taskForm.value.projectId)
+  const taskData = {
+    title: taskForm.value.title,
+    projectId: taskForm.value.projectId || '',
+    assigneeId: taskForm.value.assigneeId || '',
+    role: taskForm.value.role,
+    status: taskForm.value.status,
+    size: taskForm.value.size,
+    priority: taskForm.value.priority,
+    estimatedHours: taskForm.value.estimatedHours,
+    actualHours: 0,
+    reworkCount: taskForm.value.reworkCount || 0,
+    createdAt: new Date().toISOString().split('T')[0],
+    startedAt: null,
+    completedAt: null
+  }
   if (editingTask.value) {
-    await dataStore.editTask(editingTask.value.id, taskForm.value)
+    await dataStore.editTask(editingTask.value.id, taskData)
   } else {
-    const role = proj?.assignedRoles?.[0] || taskForm.value.role
-    await dataStore.addTask({
-      id: 't-' + Date.now(),
-      ...taskForm.value,
-      role,
-      actualHours: 0,
-      createdAt: new Date().toISOString().split('T')[0],
-      startedAt: null,
-      completedAt: null
-    })
+    await dataStore.addTask(taskData)
   }
   closeTaskDialog()
 }
@@ -827,14 +838,20 @@ function closeProjectDialog() {
 async function saveProject() {
   if (!projectForm.value.name) return
   const assignedRoles = projectForm.value.assignedRolesStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  const projectData = {
+    name: projectForm.value.name,
+    client: projectForm.value.client,
+    status: projectForm.value.status,
+    health: projectForm.value.health,
+    startDate: projectForm.value.startDate || '',
+    endDate: projectForm.value.endDate || '',
+    assignedRoles,
+    description: projectForm.value.description || ''
+  }
   if (editingProject.value) {
-    await dataStore.editProject(editingProject.value.id, { ...projectForm.value, assignedRoles })
+    await dataStore.editProject(editingProject.value.id, projectData)
   } else {
-    await dataStore.addProject({
-      id: 'proj-' + Date.now(),
-      ...projectForm.value,
-      assignedRoles
-    })
+    await dataStore.addProject(projectData)
   }
   closeProjectDialog()
 }
@@ -842,7 +859,7 @@ async function saveProject() {
 async function deleteDeveloper(id) {
   const dev = dataStore.developers.find(d => d.id === id)
   if (confirm(`Delete developer "${dev?.name}"? This will also affect their assigned tasks.`)) {
-    await dataStore.removeDeveloper(id)
+    await dataStore.deleteDeveloper(id)
   }
 }
 
@@ -855,14 +872,14 @@ async function deleteAllTasksAction() {
 async function deleteTask(id) {
   const task = dataStore.tasks.find(t => t.id === id)
   if (confirm(`Delete task "${task?.title}"?`)) {
-    await dataStore.removeTask(id)
+    await dataStore.deleteTask(id)
   }
 }
 
 async function deleteProject(id) {
   const proj = dataStore.projects.find(p => p.id === id)
   if (confirm(`Delete project "${proj?.name}"?`)) {
-    await dataStore.removeProject(id)
+    await dataStore.deleteProject(id)
   }
 }
 

@@ -208,7 +208,6 @@ async function saveTask() {
   } else {
     const now = new Date().toISOString().split('T')[0]
     const newTask = {
-      id: 't-' + Date.now(),
       ...taskForm.value,
       role: getDeveloperRole(taskForm.value.assigneeId),
       actualHours: taskForm.value.actualHours || 0,
@@ -225,7 +224,7 @@ async function saveTask() {
 async function confirmDeleteTask() {
   if (editingTask.value && authStore.isManager) {
     if (confirm(`Delete task "${editingTask.value.title}"?`)) {
-      await dataStore.removeTask(editingTask.value.id)
+      await dataStore.deleteTask(editingTask.value.id)
       closeTaskDialog()
     }
   }

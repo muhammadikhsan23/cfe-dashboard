@@ -10,9 +10,12 @@ import { useDataStore } from './stores/data'
 const authStore = useAuthStore()
 const dataStore = useDataStore()
 
-onMounted(() => {
-  authStore.restoreSession()
-  dataStore.loadData()
+onMounted(async () => {
+  await authStore.init()
+  if (authStore.isAuthenticated) {
+    dataStore.loadAll()
+    dataStore.setupRealtimeSync()
+  }
 })
 </script>
 
