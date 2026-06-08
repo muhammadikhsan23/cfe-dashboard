@@ -332,8 +332,21 @@
         </div>
       </div>
       <div class="form-group">
-        <label>Assigned Roles (comma separated: web,mobile,shopify)</label>
-        <InputText v-model="projectForm.assignedRolesStr" class="full-width" />
+        <label>Assigned Roles</label>
+        <div class="role-checkboxes">
+          <div class="role-checkbox-item">
+            <Checkbox v-model="projectForm.roles" value="web" inputId="role-web" />
+            <label for="role-web" class="role-checkbox-label">Web</label>
+          </div>
+          <div class="role-checkbox-item">
+            <Checkbox v-model="projectForm.roles" value="mobile" inputId="role-mobile" />
+            <label for="role-mobile" class="role-checkbox-label">Mobile</label>
+          </div>
+          <div class="role-checkbox-item">
+            <Checkbox v-model="projectForm.roles" value="shopify" inputId="role-shopify" />
+            <label for="role-shopify" class="role-checkbox-label">Shopify</label>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label>Description</label>
@@ -368,7 +381,7 @@ const allFileInput = ref(null)
 
 const devForm = ref({ name: '', role: 'web', type: 'staff', level: 'mid', capacity: 7, skillsStr: '' })
 const taskForm = ref({ title: '', projectId: '', assigneeId: '', role: 'web', status: 'backlog', size: 'M', priority: 'medium', estimatedHours: 0, reworkCount: 0 })
-const projectForm = ref({ name: '', client: '', status: 'active', health: 'on-track', startDate: '', endDate: '', assignedRolesStr: '', description: '' })
+const projectForm = ref({ name: '', client: '', status: 'active', health: 'on-track', startDate: '', endDate: '', roles: [], description: '' })
 
 const devRoleOptions = [
   { label: 'Web', value: 'web' },
@@ -823,7 +836,7 @@ function editProject(project) {
     health: project.health,
     startDate: project.startDate,
     endDate: project.endDate,
-    assignedRolesStr: (project.assignedRoles || []).join(','),
+    roles: [...(project.assignedRoles || [])],
     description: project.description || ''
   }
   showProjectDialog.value = true
@@ -831,13 +844,12 @@ function editProject(project) {
 
 function closeProjectDialog() {
   editingProject.value = null
-  projectForm.value = { name: '', client: '', status: 'active', health: 'on-track', startDate: '', endDate: '', assignedRolesStr: '', description: '' }
+  projectForm.value = { name: '', client: '', status: 'active', health: 'on-track', startDate: '', endDate: '', roles: [], description: '' }
   showProjectDialog.value = false
 }
 
 async function saveProject() {
   if (!projectForm.value.name) return
-  const assignedRoles = projectForm.value.assignedRolesStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
   const projectData = {
     name: projectForm.value.name,
     client: projectForm.value.client,
@@ -845,7 +857,7 @@ async function saveProject() {
     health: projectForm.value.health,
     startDate: projectForm.value.startDate || '',
     endDate: projectForm.value.endDate || '',
-    assignedRoles,
+    assignedRoles: projectForm.value.roles,
     description: projectForm.value.description || ''
   }
   if (editingProject.value) {
@@ -1105,5 +1117,23 @@ async function clearAllData() {
   font-size: 11px;
   color: #6b7280;
   font-style: italic;
+}
+
+.role-checkboxes {
+  display: flex;
+  gap: 24px;
+}
+
+.role-checkbox-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.role-checkbox-label {
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
 }
 </style>
