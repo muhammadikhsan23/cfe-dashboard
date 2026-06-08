@@ -85,9 +85,11 @@
       </div>
       <div class="form-group">
         <label>Assigned Roles</label>
-        <div class="checkbox-group">
-          <Checkbox v-for="role in roleOptions" :key="role.value" v-model="projectForm.assignedRoles" :value="role.value" :inputId="'role-' + role.value" />
-          <label v-for="role in roleOptions" :key="role.value" :for="'role-' + role.value" style="margin-right: 12px;">{{ role.label }}</label>
+        <div class="role-checkboxes">
+          <div class="role-checkbox-item" v-for="role in roleOptions" :key="role.value">
+            <Checkbox v-model="projectForm.assignedRoles" :value="role.value" :inputId="'role-' + role.value" />
+            <label :for="'role-' + role.value" class="role-checkbox-label">{{ role.label }}</label>
+          </div>
         </div>
       </div>
       <template #footer>
@@ -357,10 +359,22 @@ async function deleteProject(id) {
   width: 100%;
 }
 
-.checkbox-group {
+.role-checkboxes {
   display: flex;
+  gap: 24px;
+}
+
+.role-checkbox-item {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.role-checkbox-label {
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
 }
 
 @media (max-width: 768px) {
