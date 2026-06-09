@@ -122,6 +122,13 @@ function isToday(date) {
   return date.toDateString() === today.toDateString()
 }
 
+function parseLocalDate(dateStr) {
+  // Parse date string as local date (not UTC) to avoid timezone issues
+  // Format: "2026-06-09" -> local midnight
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
 function getTasksForDay(devId, date) {
   const tasks = dataStore.tasks.filter(t => 
     t.assigneeId === devId && 
@@ -133,18 +140,20 @@ function getTasksForDay(devId, date) {
     const taskDateStr = task.startedAt || task.createdAt
     if (!taskDateStr) return false
     
-    const taskDate = new Date(taskDateStr)
-    if (isNaN(taskDate.getTime())) return false
+    const taskStart = parseLocalDate(taskDateStr)
+    if (isNaN(taskStart.getTime())) return false
     
     // Check if task falls on this date or spans to this date
-    const taskStart = taskDate
     const taskEnd = new Date(taskStart)
     const hoursToAllocate = task.estimatedHours || 4
     const capacity = getDevCapacity(devId)
     const daysNeeded = Math.ceil(hoursToAllocate / capacity)
     taskEnd.setDate(taskStart.getDate() + daysNeeded)
     
-    return date >= taskStart && date < taskEnd
+    // Compare date-only (strip time component)
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    return dayStart >= new Date(taskStart.getFullYear(), taskStart.getMonth(), taskStart.getDate()) && 
+           dayStart < new Date(taskEnd.getFullYear(), taskEnd.getMonth(), taskEnd.getDate())
   })
 }
 
