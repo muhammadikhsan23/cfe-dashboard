@@ -52,11 +52,12 @@
             v-for="task in getTasksForDay(dev.id, day)" 
             :key="task.id" 
             class="timeline-task"
-            :class="'size-' + task.size"
+            :class="['size-' + task.size, { 'task-ready': task.status === 'ready' }]"
           >
             <span class="task-size-badge" :class="'size-' + task.size">{{ task.size }}</span>
             <span class="task-title" :title="task.title">{{ task.title }}</span>
             <span class="task-hours">{{ task.estimatedHours }}h</span>
+            <span v-if="task.status === 'ready'" class="ready-label">READY</span>
             <span v-if="isOverdue(task)" class="overdue-badge">Overdue</span>
           </div>
         </div>
@@ -436,6 +437,34 @@ function goToCurrentWeek() {
   padding: 2px 4px;
   border-radius: 3px;
   flex-shrink: 0;
+}
+
+/* Ready tasks - semi-transparent to show they're not yet started */
+.timeline-task.task-ready {
+  opacity: 0.5;
+  border-style: dashed;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    rgba(255,255,255,0.1) 5px,
+    rgba(255,255,255,0.1) 10px
+  );
+}
+
+.timeline-task.task-ready .task-title {
+  font-style: italic;
+}
+
+.ready-label {
+  background: #e5e7eb;
+  color: #6b7280;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  text-transform: uppercase;
 }
 
 .empty-state {
