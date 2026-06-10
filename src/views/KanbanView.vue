@@ -107,7 +107,6 @@
 import { ref, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useDataStore } from '../stores/data'
-import { v4 as uuidv4 } from 'uuid'
 
 const authStore = useAuthStore()
 const dataStore = useDataStore()

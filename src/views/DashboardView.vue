@@ -180,10 +180,14 @@ import { useAuthStore } from '../stores/auth'
 import { useDataStore } from '../stores/data'
 import * as echarts from 'echarts'
 
+import { onUnmounted } from 'vue'
+
 const authStore = useAuthStore()
 const dataStore = useDataStore()
 const taskChart = ref(null)
 const roleChart = ref(null)
+let taskChartInstance = null
+let roleChartInstance = null
 
 const sortedByOccupancy = computed(() => {
   return [...dataStore.developerOccupancy].sort((a, b) => b.occupancyRate - a.occupancyRate)
@@ -248,10 +252,20 @@ function formatDate(date) {
 }
 
 function initCharts() {
+  // Dispose existing chart instances to prevent memory leaks
+  if (taskChartInstance) {
+    taskChartInstance.dispose()
+    taskChartInstance = null
+  }
+  if (roleChartInstance) {
+    roleChartInstance.dispose()
+    roleChartInstance = null
+  }
+  
   // Task Status Pie Chart
   if (taskChart.value) {
-    const chart = echarts.init(taskChart.value)
-    chart.setOption({
+    taskChartInstance = echarts.init(taskChart.value)
+    taskChartInstance.setOption({
       tooltip: { trigger: 'item' },
       series: [{
         type: 'pie',
@@ -272,11 +286,11 @@ function initCharts() {
   
   // Role Distribution Bar Chart
   if (roleChart.value) {
-    const chart = echarts.init(roleChart.value)
+    roleChartInstance = echarts.init(roleChart.value)
     const webTasks = dataStore.tasks.filter(t => t.role === 'web').length
     const mobileTasks = dataStore.tasks.filter(t => t.role === 'mobile').length
     const shopifyTasks = dataStore.tasks.filter(t => t.role === 'shopify').length
-    chart.setOption({
+    roleChartInstance.setOption({
       tooltip: { trigger: 'axis' },
       grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
       xAxis: { type: 'category', data: ['Web', 'Mobile', 'Shopify'], axisLabel: { fontWeight: 'bold' } },
@@ -305,6 +319,18 @@ watch(() => dataStore.projects, () => {
 
 onMounted(() => {
   setTimeout(initCharts, 200)
+})
+
+onUnmounted(() => {
+  // Clean up chart instances when component is unmounted
+  if (taskChartInstance) {
+    taskChartInstance.dispose()
+    taskChartInstance = null
+  }
+  if (roleChartInstance) {
+    roleChartInstance.dispose()
+    roleChartInstance = null
+  }
 })
 </script>
 

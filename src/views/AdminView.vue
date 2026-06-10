@@ -99,6 +99,7 @@
             <Column field="reworkCount" header="Rework" />
             <Column header="Actions">
               <template #body="{ data }">
+                <Button icon="pi pi-pencil" text rounded size="small" @click="editTask(data)" />
                 <Button icon="pi pi-trash" text rounded severity="danger" size="small" @click="deleteTask(data.id)" />
               </template>
             </Column>
@@ -646,7 +647,7 @@ async function handleJSONImport(text, type) {
       }
       alert('Projects imported!')
     }
-    await dataStore.loadData()
+    await dataStore.loadAll()
   } catch (e) {
     alert('Error importing JSON: ' + e.message)
   }
@@ -692,8 +693,8 @@ async function handleCSVImport(text, type) {
           status: obj.Status || 'backlog',
           size: obj.Size || 'M',
           priority: obj.Priority || 'medium',
-          assigneeId: assignee?.id || '',
-          projectId: project?.id || '',
+          assigneeId: assignee?.id || null,
+          projectId: project?.id || null,
           role: assignee?.role || 'web',
           estimatedHours: parseFloat(obj['Est. Hours']) || 0,
           actualHours: parseFloat(obj['Actual Hours']) || 0,
@@ -725,7 +726,7 @@ async function handleCSVImport(text, type) {
     }
     alert(`Imported ${count} projects!`)
   }
-  await dataStore.loadData()
+  await dataStore.loadAll()
 }
 
 function parseCSVLine(line) {
@@ -804,24 +805,42 @@ function closeTaskDialog() {
 async function saveTask() {
   if (!taskForm.value.title) return
   const proj = dataStore.projects.find(p => p.id === taskForm.value.projectId)
-  const taskData = {
-    title: taskForm.value.title,
-    projectId: taskForm.value.projectId || '',
-    assigneeId: taskForm.value.assigneeId || '',
-    role: taskForm.value.role,
-    status: taskForm.value.status,
-    size: taskForm.value.size,
-    priority: taskForm.value.priority,
-    estimatedHours: taskForm.value.estimatedHours,
-    actualHours: 0,
-    reworkCount: taskForm.value.reworkCount || 0,
-    createdAt: new Date().toISOString().split('T')[0],
-    startedAt: null,
-    completedAt: null
-  }
+  
   if (editingTask.value) {
+    // Preserve existing values when editing
+    const taskData = {
+      title: taskForm.value.title,
+      projectId: taskForm.value.projectId || null,
+      assigneeId: taskForm.value.assigneeId || null,
+      role: taskForm.value.role,
+      status: taskForm.value.status,
+      size: taskForm.value.size,
+      priority: taskForm.value.priority,
+      estimatedHours: taskForm.value.estimatedHours,
+      actualHours: taskForm.value.actualHours || editingTask.value.actualHours || 0,
+      reworkCount: taskForm.value.reworkCount || 0,
+      createdAt: editingTask.value.createdAt || new Date().toISOString().split('T')[0],
+      startedAt: editingTask.value.startedAt || null,
+      completedAt: editingTask.value.completedAt || null
+    }
     await dataStore.editTask(editingTask.value.id, taskData)
   } else {
+    // New task
+    const taskData = {
+      title: taskForm.value.title,
+      projectId: taskForm.value.projectId || null,
+      assigneeId: taskForm.value.assigneeId || null,
+      role: taskForm.value.role,
+      status: taskForm.value.status,
+      size: taskForm.value.size,
+      priority: taskForm.value.priority,
+      estimatedHours: taskForm.value.estimatedHours,
+      actualHours: 0,
+      reworkCount: taskForm.value.reworkCount || 0,
+      createdAt: new Date().toISOString().split('T')[0],
+      startedAt: null,
+      completedAt: null
+    }
     await dataStore.addTask(taskData)
   }
   closeTaskDialog()
