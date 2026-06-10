@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
-  base: '/cfe-dashboard/',
+  base: '/',
   plugins: [vue()],
   server: {
     port: 7890,
