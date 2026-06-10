@@ -13,7 +13,7 @@
       </div>
     </div>
     
-    <p class="page-description">Visual view of how tasks spread across the week for each developer</p>
+    <p class="page-description">Visual view of how tasks spread across the week for each developer. In-progress tasks shown first, ready tasks fill remaining capacity from today onward.</p>
     
     <!-- Developer Timeline Cards -->
     <div v-for="dev in filteredOccupancy" :key="dev.id" class="timeline-card">
@@ -23,8 +23,8 @@
           <div class="dev-meta">{{ getRoleLabel(dev.role) }} &middot; {{ dev.capacity }}h/day</div>
         </div>
         <div class="dev-stats">
-          <span class="stat">{{ dev.activeTasks }} active</span>
-          <span class="stat">{{ dev.queuedTasks }} queued</span>
+          <span class="stat active-stat">{{ dev.activeTasks }} active</span>
+          <span class="stat queued-stat">{{ dev.queuedTasks }} queued</span>
         </div>
       </div>
       <div class="timeline">
@@ -48,17 +48,45 @@
           class="timeline-day-cell"
           :class="{ 'is-today': isToday(day) }"
         >
+          <!-- In-progress tasks -->
           <div 
-            v-for="task in getTasksForDay(dev.id, day)" 
+            v-for="task in getInProgressForDay(dev.id, day)" 
             :key="task.id" 
-            class="timeline-task"
-            :class="['size-' + task.size, { 'task-ready': task.status === 'ready' }]"
+            class="timeline-task task-inprogress"
+            :class="'size-' + task.size"
+          >
+            <span class="task-size-badge" :class="'size-' + task.size">{{ task.size }}</span>
+            <span class="task-title" :title="task.title">{{ task.title }}</span>
+            <span v-if="task.actualHours" class="task-hours-badge">
+              {{ task.actualHours }}/{{ task.estimatedHours }}h
+            </span>
+            <span v-else class="task-hours">{{ task.estimatedHours }}h</span>
+            <span v-if="isOverdue(task)" class="overdue-badge">Overdue</span>
+          </div>
+
+          <!-- Ready tasks (fill remaining capacity from today onward) -->
+          <div 
+            v-for="task in getReadyForDay(dev.id, day)" 
+            :key="task.id" 
+            class="timeline-task task-ready"
+            :class="'size-' + task.size"
           >
             <span class="task-size-badge" :class="'size-' + task.size">{{ task.size }}</span>
             <span class="task-title" :title="task.title">{{ task.title }}</span>
             <span class="task-hours">{{ task.estimatedHours }}h</span>
-            <span v-if="task.status === 'ready'" class="ready-label">READY</span>
-            <span v-if="isOverdue(task)" class="overdue-badge">Overdue</span>
+            <span class="ready-label">READY</span>
+          </div>
+
+          <!-- Capacity indicator -->
+          <div class="capacity-bar" v-if="getDayAllocation(dev.id, day).total > 0">
+            <div 
+              class="capacity-fill" 
+              :class="{
+                'capacity-over': getDayAllocation(dev.id, day).total > dev.capacity,
+                'capacity-full': getDayAllocation(dev.id, day).total === dev.capacity
+              }"
+              :style="{ width: Math.min(100, (getDayAllocation(dev.id, day).total / dev.capacity) * 100) + '%' }"
+            ></div>
           </div>
         </div>
       </div>
@@ -76,7 +104,7 @@ import { useDataStore } from '../stores/data'
 
 const dataStore = useDataStore()
 const roleFilter = ref('')
-const weekOffset = ref(0) // 0 = current week, -1 = last week, etc.
+const weekOffset = ref(0)
 
 const roleOptions = [
   { label: 'All Roles', value: '' },
@@ -90,8 +118,8 @@ const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 // Calculate the Monday of the current week based on weekOffset
 const weekDates = computed(() => {
   const today = new Date()
-  const dayOfWeek = today.getDay() // 0=Sun, 1=Mon, ...
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // offset to get to Monday
+  const dayOfWeek = today.getDay()
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
   const monday = new Date(today)
   monday.setDate(today.getDate() + mondayOffset + (weekOffset.value * 7))
   monday.setHours(0, 0, 0, 0)
@@ -124,38 +152,12 @@ function isToday(date) {
 }
 
 function parseLocalDate(dateStr) {
-  // Parse date string as local date (not UTC) to avoid timezone issues
-  // Format: "2026-06-09" -> local midnight
   const [year, month, day] = dateStr.split('-').map(Number)
   return new Date(year, month - 1, day)
 }
 
-function getTasksForDay(devId, date) {
-  const tasks = dataStore.tasks.filter(t => 
-    t.assigneeId === devId && 
-    (t.status === 'in-progress' || t.status === 'ready')
-  )
-  
-  return tasks.filter(task => {
-    // Use started_at if available, otherwise created_at
-    const taskDateStr = task.startedAt || task.createdAt
-    if (!taskDateStr) return false
-    
-    const taskStart = parseLocalDate(taskDateStr)
-    if (isNaN(taskStart.getTime())) return false
-    
-    // Check if task falls on this date or spans to this date
-    const taskEnd = new Date(taskStart)
-    const hoursToAllocate = task.estimatedHours || 4
-    const capacity = getDevCapacity(devId)
-    const daysNeeded = Math.ceil(hoursToAllocate / capacity)
-    taskEnd.setDate(taskStart.getDate() + daysNeeded)
-    
-    // Compare date-only (strip time component)
-    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-    return dayStart >= new Date(taskStart.getFullYear(), taskStart.getMonth(), taskStart.getDate()) && 
-           dayStart < new Date(taskEnd.getFullYear(), taskEnd.getMonth(), taskEnd.getDate())
-  })
+function normalizeDate(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
 function getDevCapacity(devId) {
@@ -163,9 +165,180 @@ function getDevCapacity(devId) {
   return (parseInt(dev?.capacity) || 8)
 }
 
+// Get all in-progress tasks for a developer that touch a specific day
+function getInProgressForDay(devId, date) {
+  const capacity = getDevCapacity(devId)
+  const dayStart = normalizeDate(date)
+  
+  const inProgressTasks = dataStore.tasks.filter(t => 
+    t.assigneeId === devId && t.status === 'in-progress' && t.startedAt
+  )
+  
+  return inProgressTasks.filter(task => {
+    const taskStart = parseLocalDate(task.startedAt)
+    if (isNaN(taskStart.getTime())) return false
+    const taskStartNorm = normalizeDate(taskStart)
+    
+    // Calculate how many days this task spans
+    const hoursToAllocate = task.estimatedHours || 4
+    const daysNeeded = Math.ceil(hoursToAllocate / capacity)
+    
+    const taskEnd = new Date(taskStartNorm)
+    taskEnd.setDate(taskEnd.getDate() + daysNeeded)
+    
+    return dayStart >= taskStartNorm && dayStart < taskEnd
+  })
+}
+
+// Get ready tasks projected into empty capacity slots from today onward
+function getReadyForDay(devId, date) {
+  const capacity = getDevCapacity(devId)
+  const dayStart = normalizeDate(date)
+  const todayNorm = normalizeDate(new Date())
+  
+  // Only show ready tasks from today onward (not in past days)
+  if (dayStart < todayNorm) return []
+  
+  // Get all in-progress tasks for this developer
+  const inProgressTasks = dataStore.tasks.filter(t => 
+    t.assigneeId === devId && t.status === 'in-progress' && t.startedAt
+  )
+  
+  // Get all ready tasks for this developer, sorted by createdAt (FIFO)
+  const readyTasks = dataStore.tasks
+    .filter(t => t.assigneeId === devId && t.status === 'ready')
+    .sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return dateA - dateB
+    })
+  
+  if (readyTasks.length === 0) return []
+  
+  // Build a schedule from today to end of visible week (and a bit beyond for spanning)
+  const schedule = buildReadySchedule(devId, inProgressTasks, readyTasks, capacity, todayNorm)
+  
+  // Return ready tasks that fall on this specific day
+  const dateKey = dayStart.toISOString().split('T')[0]
+  return schedule[dateKey] || []
+}
+
+// Build a schedule that fills ready tasks into empty slots
+function buildReadySchedule(devId, inProgressTasks, readyTasks, capacity, startDate) {
+  const schedule = {}
+  
+  // Calculate total 7 weeks ahead to handle large tasks spanning beyond visible week
+  const totalDays = 49 // 7 weeks
+  
+  // For each day, calculate how much capacity is used by in-progress tasks
+  const dailyInProgressHours = {}
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(startDate)
+    d.setDate(d.getDate() + i)
+    const dateKey = normalizeDate(d).toISOString().split('T')[0]
+    dailyInProgressHours[dateKey] = 0
+  }
+  
+  inProgressTasks.forEach(task => {
+    const taskStart = parseLocalDate(task.startedAt)
+    if (isNaN(taskStart.getTime())) return
+    const taskStartNorm = normalizeDate(taskStart)
+    const hoursToAllocate = task.estimatedHours || 4
+    const daysNeeded = Math.ceil(hoursToAllocate / capacity)
+    
+    for (let day = 0; day < daysNeeded; day++) {
+      const d = new Date(taskStartNorm)
+      d.setDate(d.getDate() + day)
+      const dateKey = normalizeDate(d).toISOString().split('T')[0]
+      if (dateKey in dailyInProgressHours) {
+        // Distribute hours across days
+        const remainingAfterPrevDays = hoursToAllocate - (day * capacity)
+        const hoursThisDay = Math.min(capacity, remainingAfterPrevDays)
+        dailyInProgressHours[dateKey] += hoursThisDay
+      }
+    }
+  })
+  
+  // Fill ready tasks into remaining capacity, day by day
+  const readyQueue = [...readyTasks]
+  let currentTask = readyQueue.shift()
+  let currentTaskRemaining = currentTask ? (currentTask.estimatedHours || 4) : 0
+  const taskPlacements = {} // taskId -> [dateKeys]
+  
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(startDate)
+    d.setDate(d.getDate() + i)
+    const dateKey = normalizeDate(d).toISOString().split('T')[0]
+    
+    const usedByInProgress = dailyInProgressHours[dateKey] || 0
+    let remainingCapacity = Math.max(0, capacity - usedByInProgress)
+    
+    while (remainingCapacity > 0 && currentTask) {
+      if (currentTaskRemaining <= remainingCapacity) {
+        // Task fits entirely on this day
+        if (!taskPlacements[currentTask.id]) taskPlacements[currentTask.id] = []
+        taskPlacements[currentTask.id].push(dateKey)
+        remainingCapacity -= currentTaskRemaining
+        currentTask = readyQueue.shift()
+        currentTaskRemaining = currentTask ? (currentTask.estimatedHours || 4) : 0
+      } else {
+        // Task overflows to next day
+        currentTaskRemaining -= remainingCapacity
+        if (!taskPlacements[currentTask.id]) taskPlacements[currentTask.id] = []
+        taskPlacements[currentTask.id].push(dateKey)
+        remainingCapacity = 0
+      }
+    }
+  }
+  
+  // Build the schedule object
+  for (const task of readyTasks) {
+    const dateKeys = taskPlacements[task.id] || []
+    for (const dateKey of dateKeys) {
+      if (!schedule[dateKey]) schedule[dateKey] = []
+      if (!schedule[dateKey].find(t => t.id === task.id)) {
+        schedule[dateKey].push(task)
+      }
+    }
+  }
+  
+  return schedule
+}
+
+// Calculate total allocation for a day (for capacity bar)
+function getDayAllocation(devId, date) {
+  const capacity = getDevCapacity(devId)
+  const dayStart = normalizeDate(date)
+  
+  // In-progress hours on this day
+  const inProgressTasks = getInProgressForDay(devId, date)
+  const inProgressHours = inProgressTasks.reduce((sum, task) => {
+    const hours = task.estimatedHours || 4
+    // Pro-rate: how much of this task falls on this specific day
+    const taskStart = parseLocalDate(task.startedAt)
+    const taskStartNorm = normalizeDate(taskStart)
+    const daysSinceStart = Math.floor((dayStart - taskStartNorm) / (1000 * 60 * 60 * 24))
+    const hoursAllocatedBefore = daysSinceStart * capacity
+    const remainingHours = Math.max(0, hours - hoursAllocatedBefore)
+    return sum + Math.min(capacity, remainingHours)
+  }, 0)
+  
+  // Ready hours on this day
+  const readyTasks = getReadyForDay(devId, date)
+  const readyHours = readyTasks.reduce((sum, task) => {
+    return sum + (task.estimatedHours || 4)
+  }, 0)
+  
+  return {
+    inProgress: inProgressHours,
+    ready: readyHours,
+    total: Math.min(capacity, inProgressHours) + readyHours
+  }
+}
+
 function isOverdue(task) {
   if (task.status !== 'in-progress' || !task.startedAt) return false
-  const started = new Date(task.startedAt)
+  const started = parseLocalDate(task.startedAt)
   if (isNaN(started.getTime())) return false
   const now = new Date()
   const daysElapsed = Math.floor((now - started) / (1000 * 60 * 60 * 24))
@@ -311,6 +484,16 @@ function goToCurrentWeek() {
   border-radius: 12px;
 }
 
+.active-stat {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.queued-stat {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 /* Timeline Grid */
 .timeline {
   display: grid;
@@ -354,10 +537,11 @@ function goToCurrentWeek() {
   background: #f8fafc;
   border-radius: 4px;
   padding: 6px;
-  min-height: 70px;
+  min-height: 80px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  position: relative;
 }
 
 .timeline-day-cell.is-today {
@@ -371,30 +555,89 @@ function goToCurrentWeek() {
   align-items: center;
   gap: 4px;
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   font-size: 11px;
   background: #f1f5f9;
   border-left: 3px solid #94a3b8;
 }
 
-.timeline-task.size-S {
+/* In-progress tasks */
+.task-inprogress.size-S {
   background: #f0fdf4;
   border-left-color: #22c55e;
 }
 
-.timeline-task.size-M {
+.task-inprogress.size-M {
   background: #eff6ff;
   border-left-color: #3b82f6;
 }
 
-.timeline-task.size-L {
+.task-inprogress.size-L {
   background: #fffbeb;
   border-left-color: #f59e0b;
 }
 
-.timeline-task.size-XL {
+.task-inprogress.size-XL {
   background: #fef2f2;
   border-left-color: #ef4444;
+}
+
+/* Ready tasks - semi-transparent, dashed */
+.task-ready {
+  opacity: 0.55;
+  border-left-style: dashed !important;
+}
+
+.task-ready.size-S {
+  background: #f0fdf4;
+  border-left-color: #22c55e;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    rgba(255,255,255,0.15) 5px,
+    rgba(255,255,255,0.15) 10px
+  );
+}
+
+.task-ready.size-M {
+  background: #eff6ff;
+  border-left-color: #3b82f6;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    rgba(255,255,255,0.15) 5px,
+    rgba(255,255,255,0.15) 10px
+  );
+}
+
+.task-ready.size-L {
+  background: #fffbeb;
+  border-left-color: #f59e0b;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    rgba(255,255,255,0.15) 5px,
+    rgba(255,255,255,0.15) 10px
+  );
+}
+
+.task-ready.size-XL {
+  background: #fef2f2;
+  border-left-color: #ef4444;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    rgba(255,255,255,0.15) 5px,
+    rgba(255,255,255,0.15) 10px
+  );
+}
+
+.task-ready .task-title {
+  font-style: italic;
 }
 
 .task-size-badge {
@@ -427,6 +670,17 @@ function goToCurrentWeek() {
   color: #6b7280;
   font-weight: 600;
   flex-shrink: 0;
+  font-size: 10px;
+}
+
+.task-hours-badge {
+  background: #1e40af;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
 
 .overdue-badge {
@@ -439,23 +693,6 @@ function goToCurrentWeek() {
   flex-shrink: 0;
 }
 
-/* Ready tasks - semi-transparent to show they're not yet started */
-.timeline-task.task-ready {
-  opacity: 0.5;
-  border-style: dashed;
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 5px,
-    rgba(255,255,255,0.1) 5px,
-    rgba(255,255,255,0.1) 10px
-  );
-}
-
-.timeline-task.task-ready .task-title {
-  font-style: italic;
-}
-
 .ready-label {
   background: #e5e7eb;
   color: #6b7280;
@@ -465,6 +702,30 @@ function goToCurrentWeek() {
   border-radius: 3px;
   flex-shrink: 0;
   text-transform: uppercase;
+}
+
+/* Capacity Bar */
+.capacity-bar {
+  height: 3px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  margin-top: auto;
+  overflow: hidden;
+}
+
+.capacity-fill {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.capacity-fill.capacity-full {
+  background: #22c55e;
+}
+
+.capacity-fill.capacity-over {
+  background: #ef4444;
 }
 
 .empty-state {
