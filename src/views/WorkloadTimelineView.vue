@@ -113,7 +113,7 @@ const roleOptions = [
   { label: 'Shopify', value: 'shopify' }
 ]
 
-const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 
 // Calculate the Monday of the current week based on weekOffset
 const weekDates = computed(() => {
@@ -125,7 +125,7 @@ const weekDates = computed(() => {
   monday.setHours(0, 0, 0, 0)
   
   const dates = []
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 5; i++) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
     dates.push(d)
@@ -135,7 +135,7 @@ const weekDates = computed(() => {
 
 const weekLabel = computed(() => {
   const start = weekDates.value[0]
-  const end = weekDates.value[6]
+  const end = weekDates.value[4]
   const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   const endStr = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   return `${startStr} - ${endStr}`
@@ -497,7 +497,7 @@ function goToCurrentWeek() {
 /* Timeline Grid */
 .timeline {
   display: grid;
-  grid-template-columns: 100px repeat(7, 1fr);
+  grid-template-columns: 100px repeat(5, 1fr);
   gap: 4px;
 }
 
@@ -737,10 +737,6 @@ function goToCurrentWeek() {
 @media (max-width: 1024px) {
   .timeline {
     grid-template-columns: 80px repeat(5, 1fr);
-  }
-  .timeline-header-cell:nth-child(n+7),
-  .timeline-day-cell:nth-child(n+7) {
-    display: none;
   }
 }
 </style>

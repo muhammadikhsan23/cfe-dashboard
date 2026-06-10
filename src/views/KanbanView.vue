@@ -3,7 +3,8 @@
     <div class="page-header">
       <h1>Kanban Board</h1>
       <div class="header-actions">
-        <Dropdown v-model="roleFilter" :options="roleOptions" optionLabel="label" optionValue="value" placeholder="All Roles" />
+        <Dropdown v-model="roleFilter" :options="roleOptions" optionLabel="label" optionValue="value" placeholder="All Roles" @change="onRoleChange" />
+        <Dropdown v-model="developerFilter" :options="developerOptions" optionLabel="label" optionValue="value" placeholder="All Developers" filter />
         <Button label="Add Task" icon="pi pi-plus" @click="showTaskDialog = true" />
       </div>
     </div>
@@ -52,7 +53,7 @@
         <div class="form-row">
           <div class="form-group">
             <label>Project</label>
-            <Dropdown v-model="taskForm.projectId" :options="dataStore.projects" optionLabel="name" optionValue="id" placeholder="Select Project" class="full-width" filter :overlayStyle="{ maxWidth: '300px' }" />
+            <Dropdown v-model="taskForm.projectId" :options="projectOptions" optionLabel="name" optionValue="id" placeholder="Select Project" class="full-width" filter showClear :overlayStyle="{ maxWidth: '300px' }" />
           </div>
           <div class="form-group">
             <label>Assignee</label>
@@ -112,6 +113,7 @@ const authStore = useAuthStore()
 const dataStore = useDataStore()
 
 const roleFilter = ref('')
+const developerFilter = ref('')
 const roleOptions = [
   { label: 'All Roles', value: '' },
   { label: 'Web', value: 'web' },
@@ -153,10 +155,32 @@ const filteredDevelopers = computed(() => {
   return dataStore.developers.filter(d => d.role === roleFilter.value)
 })
 
-const filteredTasks = computed(() => {
-  if (!roleFilter.value) return dataStore.tasks
-  return dataStore.tasks.filter(t => t.role === roleFilter.value)
+const developerOptions = computed(() => {
+  const devs = filteredDevelopers.value
+  return [
+    { label: 'All Developers', value: '' },
+    ...devs.map(d => ({ label: d.name, value: d.id }))
+  ]
 })
+
+const projectOptions = computed(() => {
+  return [
+    { name: '— No Project —', id: '' },
+    ...dataStore.projects
+  ]
+})
+
+const filteredTasks = computed(() => {
+  let tasks = dataStore.tasks
+  if (roleFilter.value) tasks = tasks.filter(t => t.role === roleFilter.value)
+  if (developerFilter.value) tasks = tasks.filter(t => t.assigneeId === developerFilter.value)
+  return tasks
+})
+
+function onRoleChange() {
+  // Reset developer filter when role changes to avoid invalid selection
+  developerFilter.value = ''
+}
 
 function getTasksByStatus(status) {
   return filteredTasks.value.filter(t => t.status === status)
