@@ -172,7 +172,12 @@ const projectOptions = computed(() => {
 
 const filteredTasks = computed(() => {
   let tasks = dataStore.tasks
-  if (roleFilter.value) tasks = tasks.filter(t => t.role === roleFilter.value)
+  if (roleFilter.value) {
+    tasks = tasks.filter(t => {
+      const assignee = dataStore.developers.find(d => d.id === t.assigneeId)
+      return assignee?.role === roleFilter.value
+    })
+  }
   if (developerFilter.value) tasks = tasks.filter(t => t.assigneeId === developerFilter.value)
   return tasks
 })

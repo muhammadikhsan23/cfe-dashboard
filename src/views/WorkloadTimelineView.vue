@@ -165,10 +165,18 @@ function getDevCapacity(devId) {
   return (parseInt(dev?.capacity) || 8)
 }
 
+function getRemainingHours(task) {
+  const estimated = task.estimatedHours || 4
+  const actual = task.actualHours || 0
+  return Math.max(0, estimated - actual)
+}
+
 // Get all in-progress tasks for a developer that touch a specific day
+// Uses actualHours to project remaining work from today forward
 function getInProgressForDay(devId, date) {
   const capacity = getDevCapacity(devId)
   const dayStart = normalizeDate(date)
+  const todayNorm = normalizeDate(new Date())
   
   const inProgressTasks = dataStore.tasks.filter(t => 
     t.assigneeId === devId && t.status === 'in-progress' && t.startedAt
@@ -179,14 +187,26 @@ function getInProgressForDay(devId, date) {
     if (isNaN(taskStart.getTime())) return false
     const taskStartNorm = normalizeDate(taskStart)
     
-    // Calculate how many days this task spans
-    const hoursToAllocate = task.estimatedHours || 4
-    const daysNeeded = Math.ceil(hoursToAllocate / capacity)
-    
-    const taskEnd = new Date(taskStartNorm)
-    taskEnd.setDate(taskEnd.getDate() + daysNeeded)
-    
-    return dayStart >= taskStartNorm && dayStart < taskEnd
+    // For past days: show original schedule (startedAt + estimatedHours)
+    // For today and future: project based on remaining hours from today
+    if (dayStart < todayNorm) {
+      const hoursToAllocate = task.estimatedHours || 4
+      const daysNeeded = Math.ceil(hoursToAllocate / capacity)
+      const taskEnd = new Date(taskStartNorm)
+      taskEnd.setDate(taskEnd.getDate() + daysNeeded)
+      return dayStart >= taskStartNorm && dayStart < taskEnd
+    } else {
+      // Today and future: use remaining hours projected from today
+      const remaining = getRemainingHours(task)
+      if (remaining <= 0) {
+        // Task should be done but hasn't been moved — still show on today
+        return dayStart.getTime() === todayNorm.getTime()
+      }
+      const daysNeededFromToday = Math.ceil(remaining / capacity)
+      const projectedEnd = new Date(todayNorm)
+      projectedEnd.setDate(projectedEnd.getDate() + daysNeededFromToday)
+      return dayStart >= todayNorm && dayStart < projectedEnd
+    }
   })
 }
 
@@ -243,16 +263,20 @@ function buildReadySchedule(devId, inProgressTasks, readyTasks, capacity, startD
     const taskStart = parseLocalDate(task.startedAt)
     if (isNaN(taskStart.getTime())) return
     const taskStartNorm = normalizeDate(taskStart)
-    const hoursToAllocate = task.estimatedHours || 4
-    const daysNeeded = Math.ceil(hoursToAllocate / capacity)
     
-    for (let day = 0; day < daysNeeded; day++) {
-      const d = new Date(taskStartNorm)
+    // Use remaining hours (not full estimate) for today and future days
+    const remaining = getRemainingHours(task)
+    if (remaining <= 0) return // Task is effectively done
+    
+    // Project remaining work from today forward
+    const daysNeededFromToday = Math.ceil(remaining / capacity)
+    
+    for (let day = 0; day < daysNeededFromToday; day++) {
+      const d = new Date(startDate)
       d.setDate(d.getDate() + day)
       const dateKey = normalizeDate(d).toISOString().split('T')[0]
       if (dateKey in dailyInProgressHours) {
-        // Distribute hours across days
-        const remainingAfterPrevDays = hoursToAllocate - (day * capacity)
+        const remainingAfterPrevDays = remaining - (day * capacity)
         const hoursThisDay = Math.min(capacity, remainingAfterPrevDays)
         dailyInProgressHours[dateKey] += hoursThisDay
       }
@@ -344,7 +368,10 @@ function isOverdue(task) {
   const daysElapsed = Math.floor((now - started) / (1000 * 60 * 60 * 24))
   const dev = dataStore.developers.find(d => d.id === task.assigneeId)
   const capacity = parseInt(dev?.capacity) || 8
-  const daysNeeded = Math.ceil((task.estimatedHours || 4) / capacity)
+  // Use remaining hours for overdue check
+  const remaining = getRemainingHours(task)
+  if (remaining <= 0) return false // effectively done
+  const daysNeeded = Math.ceil(remaining / capacity)
   return daysElapsed > daysNeeded
 }
 
@@ -542,6 +569,8 @@ function goToCurrentWeek() {
   flex-direction: column;
   gap: 4px;
   position: relative;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .timeline-day-cell.is-today {
@@ -552,13 +581,15 @@ function goToCurrentWeek() {
 /* Tasks */
 .timeline-task {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
   border-radius: 6px;
   padding: 5px 8px;
   font-size: 11px;
   background: #f1f5f9;
   border-left: 3px solid #94a3b8;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* In-progress tasks */
@@ -662,7 +693,11 @@ function goToCurrentWeek() {
   color: #1f2937;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.3;
+  max-height: 2.6em;
   min-width: 0;
 }
 
